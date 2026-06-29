@@ -51,8 +51,8 @@ app.use(session({
   resave: false,
   saveUninitialized: false
 }));
-
 app.use("/uploads", express.static("uploads"));
+
 
 
 // ================= delet users test  =================
@@ -181,6 +181,23 @@ button {
   cursor: pointer;
 }
 
+.video-card {
+  width: 100%;
+  max-width: 600px;
+  margin: 15px auto;
+  border-radius: 16px;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+}
+
+.video-card video {
+  width: 100%;
+  height: 320px;
+  object-fit: cover;
+  display: block;
+}
+
 /* labels (NEW IMPORTANT PART) */
 label {
   display: block;
@@ -189,6 +206,19 @@ label {
   font-size: 14px;
   font-weight: 600;
   color: #334155;
+}
+
+.section-btns {
+  display: flex;
+  gap: 12px;
+  margin-top: 15px;
+  flex-wrap: wrap;
+}
+
+.video-player {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
 }
 
 /* video ad */
@@ -204,7 +234,30 @@ h1 {
   font-size: 38px;
   margin-bottom: 10px;
 }
+.topbar {
+  width: 100%;
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  background: linear-gradient(135deg, #3b82f6, #06b6d4);
+  padding: 15px 25px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.logo {
+  font-size: 22px;
+  font-weight: bold;
+  color: white;
+}
 </style>
+
+`;
+const navbar = `
+<header class="topbar">
+  <div class="logo">
+    🎓 Creative Minds
+  </div>
+</header>
 `;
 // ================= MIDDLEWARE =================
 
@@ -233,7 +286,36 @@ function auth(req, res, next) {
   }
   next();
 }
+// =================protect  UPLOAD VIDEO =================
+const path = require("path");
+app.get("/video/:filename", auth, (req, res) => {
+
+  const user = req.session.user;
+
+  db.get(
+    "SELECT * FROM subject_content WHERE filename = ? AND type='video'",
+    [req.params.filename],
+    (err, video) => {
+
+      if (err) return res.status(500).send("DB Error");
+
+      if (!video) return res.status(404).send("Video not found");
+
+      // 🔐 حماية الطلاب
+      if (
+        user.role === "student" &&
+        (video.stage !== user.stage || video.grade !== user.grade)
+      ) {
+        return res.status(403).send("Access denied");
+      }
+
+      const filePath = path.join(__dirname, "uploads", req.params.filename);
+      res.sendFile(filePath);
+    }
+  );
+});
 // ================= UPLOAD VIDEO =================
+
 function validateStageGrade(stage, grade) {
 
   const valid = {
@@ -253,6 +335,8 @@ app.get("/upload-video", teacher, (req, res) => {
       <html>
       <head>${ui}</head>
       <body>
+      ${navbar}
+
         <div class="container">
 
           <h1>📹 Upload Video</h1>
@@ -274,12 +358,12 @@ app.get("/upload-video", teacher, (req, res) => {
 
               <label>Select Grade</label>
               <select name="grade" required>
-                <option value="1">Grade 1</option>
-                <option value="2">Grade 2</option>
-                <option value="3">Grade 3</option>
-                <option value="4">Grade 4</option>
-                <option value="5">Grade 5</option>
-                <option value="6">Grade 6</option>
+                <option value="Grade 1">Grade 1</option>
+                <option value="Grade 2">Grade 2</option>
+                <option value="Grade 3">Grade 3</option>
+                <option value="Grade 4">Grade 4</option>
+                <option value="Grade 5">Grade 5</option>
+                <option value="Grade 6">Grade 6</option>
                 <option value="Prep 1">Prep 1</option>
                 <option value="Prep 2">Prep 2</option>
                 <option value="Prep 3">Prep 3</option>
@@ -310,7 +394,13 @@ app.post("/upload-video", teacher, upload.single("video"), (req, res) => {
   if (grade.startsWith("Prep")) {
     stage = "Prep";
   } else {
-    stage = "Primary"; // أو Upper Primary حسب نظامك
+    const gradeNumber = parseInt(grade);
+
+    if (gradeNumber >= 1 && gradeNumber <= 3) {
+      stage = "Primary";
+    } else if (gradeNumber >= 4 && gradeNumber <= 6) {
+      stage = "Upper Primary";
+    }
   }
 
   if (!validateStageGrade(stage, grade)) {
@@ -330,12 +420,14 @@ app.post("/upload-video", teacher, upload.single("video"), (req, res) => {
     req.file?.filename || null,
     req.body.description || null
   ], (err) => {
+
     if (err) {
       console.log(err);
       return res.send("DB error");
     }
 
     res.redirect("/upload-video");
+
   });
 
 });
@@ -355,6 +447,7 @@ app.get("/upload-sheet", teacher, (req, res) => {
       <html>
       <head>${ui}</head>
       <body>
+                   ${navbar}
 
         <div class="container">
 
@@ -413,7 +506,13 @@ app.post("/upload-sheet", teacher, upload.single("sheet"), (req, res) => {
   if (grade.startsWith("Prep")) {
     stage = "Prep";
   } else {
-    stage = "Primary";
+    const gradeNumber = parseInt(grade);
+
+    if (gradeNumber >= 1 && gradeNumber <= 3) {
+      stage = "Primary";
+    } else if (gradeNumber >= 4 && gradeNumber <= 6) {
+      stage = "Upper Primary";
+    }
   }
 
   if (!validateStageGrade(stage, grade)) {
@@ -433,16 +532,17 @@ app.post("/upload-sheet", teacher, upload.single("sheet"), (req, res) => {
     req.file?.filename || null,
     req.body.description || null
   ], (err) => {
+
     if (err) {
       console.log(err);
       return res.send("DB error");
     }
 
     res.redirect("/upload-sheet");
+
   });
 
 });
-
 // ================= ADD HOMEWORK =================
 // ================= ADD HOMEWORK =================
 
@@ -524,7 +624,17 @@ app.post("/add-homework", teacher, upload.single("file"), (req, res) => {
   if (grade.startsWith("Prep")) {
     stage = "Prep";
   } else {
-    stage = "Primary";
+    const gradeNumber = parseInt(grade);
+
+    if (gradeNumber >= 1 && gradeNumber <= 3) {
+      stage = "Primary";
+    } else if (gradeNumber >= 4 && gradeNumber <= 6) {
+      stage = "Upper Primary";
+    }
+  }
+
+  if (!validateStageGrade(stage, grade)) {
+    return res.send("Invalid stage or grade");
   }
 
   db.run(`
@@ -812,7 +922,7 @@ app.get("/dashboard", auth, (req, res) => {
               <a class="btn btn-login" href="/users">
   👥 Manage Users
 </a>
-        <a class="btn btn-create" href="/admin/create-teacher">➕ Create Teacher</a>
+        
  <a class="btn btn-login" href="/admin-ads">
         📢 Manage Ads
       </a>
@@ -824,6 +934,7 @@ app.get("/dashboard", auth, (req, res) => {
     <html>
     <head>${ui}</head>
     <body>
+             ${navbar}
 
       <div class="container">
 
@@ -985,6 +1096,7 @@ app.post("/admin/create-account", auth, admin, async (req, res) => {
 app.get("/subject/:id", auth, (req, res) => {
 
   const user = req.session.user;
+  const type = req.query.type; // video | sheet | homework
 
   db.get(
     "SELECT * FROM subjects WHERE id = ?",
@@ -997,88 +1109,109 @@ app.get("/subject/:id", auth, (req, res) => {
       db.all(`
         SELECT * FROM subject_content
         WHERE subject_id = ?
-        AND grade = ?
         AND stage = ?
-      `, [
+        AND REPLACE(grade, 'Grade ', '') = ?
+        ${type ? "AND type = ?" : ""}
+      `,
+      [
         req.params.id,
+        user.stage,
         user.grade,
-        user.stage
-      ], (err, content) => {
+        ...(type ? [type] : [])
+      ],
+      (err, content) => {
 
-        if (err) {
-          console.log("DB ERROR:", err.message);
-          return res.status(500).send(err.message);
-        }
+        if (err) return res.status(500).send(err.message);
 
-        const videos = content.filter(c => c.type === "video");
-        const sheets = content.filter(c => c.type === "sheet");
-        const homeworks = content.filter(c => c.type === "homework");
+        const html = content.map(c => {
+
+          if (c.type === "video") {
+            return `
+              <div class="card">
+                <h3>🎥 ${c.title}</h3>
+                <video controls style="width:100%; aspect-ratio:16/9; object-fit:cover;">
+                  <source src="/video/${c.filename}" type="video/mp4">
+                </video>
+              </div>
+            `;
+          }
+
+          if (c.type === "sheet") {
+            return `
+              <div class="card">
+                <h3>📄 ${c.title}</h3>
+                <a class="btn btn-login" href="/uploads/${c.filename}" download>
+                  Download
+                </a>
+              </div>
+            `;
+          }
+
+          if (c.type === "homework") {
+  return `
+    <div class="card">
+
+      <h3>📝 ${c.title}</h3>
+
+      <p>${c.description || ""}</p>
+
+      ${
+        c.filename
+          ? `
+            <a class="btn btn-login"
+               href="/uploads/${c.filename}"
+               download>
+               📄 Download Worksheet
+            </a>
+          `
+          : ""
+      }
+
+      <form
+        method="POST"
+        action="/submit-homework/${c.id}"
+        enctype="multipart/form-data">
+
+        <input
+          type="file"
+          name="file"
+          accept=".pdf,.png,.jpg,.jpeg"
+          required>
+
+        <button class="btn btn-create">
+          📤 Submit Homework
+        </button>
+
+      </form>
+
+    </div>
+  `;
+}
+
+          return "";
+        }).join("");
 
         res.send(`
           <html>
           <head>${ui}</head>
           <body>
+          ${navbar}
+
             <div class="container">
 
               <h1>${subject.name}</h1>
 
-              <!-- ================= VIDEOS ================= -->
-              <h2>Videos</h2>
-              ${
-                videos.map(v => `
-                  <div class="card">
-                    <h3>🎥 ${v.title}</h3>
-                    <video controls style="width:100%">
-                      <source src="/uploads/${v.filename}">
-                    </video>
-                  </div>
-                `).join("") || "<p>No videos</p>"
-              }
+              <!-- 🔘 FILTER BUTTONS -->
+              <div class="card">
+                <a href="/subject/${subject.id}?type=video" class="btn btn-login">📹 Videos</a>
+                <a href="/subject/${subject.id}?type=sheet" class="btn btn-login">📄 Sheets</a>
+                <a href="/subject/${subject.id}?type=homework" class="btn btn-login">📝 Homework</a>
+              </div>
 
-              <!-- ================= SHEETS ================= -->
-              <h2>Sheets</h2>
-              ${
-                sheets.map(s => `
-                  <div class="card">
-                    <h3>📄 ${s.title}</h3>
-
-                    <a class="btn btn-login" href="/uploads/${s.filename}" download>
-                      📥 Download Sheet
-                    </a>
-                  </div>
-                `).join("") || "<p>No sheets</p>"
-              }
-
-              <!-- ================= HOMEWORK ================= -->
-              <h2>Homework</h2>
-              ${
-                homeworks.map(h => `
-                  <div class="card">
-
-                    <h3>📝 ${h.title}</h3>
-                    <p>${h.description || ""}</p>
-
-                    <form method="POST" action="/submit-homework" enctype="multipart/form-data">
-
-                      <input type="hidden" name="homework_id" value="${h.id}" />
-
-                      <label>Upload Answer (PDF or Image)</label>
-
-                      <input 
-                        type="file"
-                        name="file"
-                        accept=".pdf,image/*"
-                        required
-                      />
-
-                      <button type="submit">
-                        Submit Homework
-                      </button>
-
-                    </form>
-
-                  </div>
-                `).join("") || "<p>No homework</p>"
+              <!-- 📦 CONTENT -->
+              ${type
+                ? (html || "<p>No content available</p>")
+                : "<p>👇 Please select a section above</p>"
               }
 
             </div>
@@ -1090,6 +1223,38 @@ app.get("/subject/:id", auth, (req, res) => {
 
     }
   );
+
+});
+app.post("/submit-homework/:id", auth, upload.single("file"), (req, res) => {
+
+  const homeworkId = req.params.id;
+  const user = req.session.user;
+
+  if (!req.file) {
+    return res.send("❌ Please upload a file (PDF or Image)");
+  }
+
+  db.run(`
+    INSERT INTO submissions (student_id, homework_id, filename, filetype, grade)
+    VALUES (?, ?, ?, ?, ?)
+  `,
+  [
+    user.id,
+    homeworkId,
+    req.file.filename,
+    req.file.mimetype,
+    null
+  ],
+  (err) => {
+
+    if (err) return res.status(500).send(err.message);
+
+    res.send(`
+      <h2>✅ Homework Submitted Successfully</h2>
+      <a href="javascript:history.back()">Back</a>
+    `);
+
+  });
 
 });
 ////===============my grades =====================
@@ -1132,6 +1297,8 @@ app.get("/mygrades", auth, (req, res) => {
       <html>
       <head>${ui}</head>
       <body>
+      ${navbar}
+
         <div class="container">
 
           <h1>📊 My Grades</h1>
@@ -1224,6 +1391,8 @@ app.get("/my-subjects", auth, (req, res) => {
       <html>
       <head>${ui}</head>
       <body>
+      ${navbar}
+
         <div class="container">
           <h1>My Subjects</h1>
           ${html}
@@ -1893,12 +2062,22 @@ app.get("/logout",(req,res)=>{
   req.session.destroy(()=>res.redirect("/start"));
 });
 
+app.get("/debug-submissions-columns", (req, res) => {
+  db.all("PRAGMA table_info(submissions)", (err, rows) => {
+    if (err) return res.send(err.message);
 
-
+    res.send("<pre>" + JSON.stringify(rows, null, 2) + "</pre>");
+  });
+});
 const subjectsRoute = require("./routes/subjects");
 
 app.use("/api", subjectsRoute);
 // ================= SERVER =================
-app.listen(process.env.PORT || 3000, () => {
-  console.log("🚀 Server running...");
+// ====app.listen(process.env.PORT || 3000, () => {
+  // ====console.log("🚀 Server running...");
+// ====});
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("Server running");
 });
